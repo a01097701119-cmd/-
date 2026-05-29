@@ -1,4 +1,4 @@
-﻿import json
+import json
 import os
 import random
 import re
@@ -25,10 +25,7 @@ def supabase_request(method, path, query=None, payload=None):
     final_path = path.replace("{table}", table)
     qs = f"?{parse.urlencode(query)}" if query else ""
     url = f"{base_url}{final_path}{qs}"
-
-    body = None
-    if payload is not None:
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    body = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
     req = urlrequest.Request(url=url, data=body, method=method)
     req.add_header("apikey", api_key)
@@ -41,15 +38,15 @@ def supabase_request(method, path, query=None, payload=None):
         return json.loads(raw) if raw else None
 
 
+def empty_data():
+    return {"cards": [], "stats": {"correct": 0, "wrong": 0}}
+
+
 def load_data_supabase():
-    rows = supabase_request(
-        "GET",
-        "/rest/v1/{table}",
-        query={"id": "eq.1", "select": "data"},
-    )
+    rows = supabase_request("GET", "/rest/v1/{table}", query={"id": "eq.1", "select": "data"})
     if not rows:
-        return {"cards": [], "stats": {"correct": 0, "wrong": 0}}
-    return rows[0].get("data") or {"cards": [], "stats": {"correct": 0, "wrong": 0}}
+        return empty_data()
+    return rows[0].get("data") or empty_data()
 
 
 def save_data_supabase(data):
@@ -71,7 +68,7 @@ def load_data():
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    return {"cards": [], "stats": {"correct": 0, "wrong": 0}}
+    return empty_data()
 
 
 def save_data(data):
@@ -117,7 +114,7 @@ def sanitize(c):
 
 def make_card(study_date, title, question, answer, quiz_type):
     return {
-        "id": f"card-{random.randint(100000,999999)}-{int(datetime.now().timestamp())}-{random.randint(10,99)}",
+        "id": f"card-{random.randint(100000, 999999)}-{int(datetime.now().timestamp())}-{random.randint(10, 99)}",
         "title": title,
         "question": question,
         "answer": answer,
@@ -129,110 +126,65 @@ def make_card(study_date, title, question, answer, quiz_type):
     }
 
 
+def parse_outline_line(raw):
+    text = raw.strip()
+    patterns = [
+        (r"^\d+\.\d+\.\d+\s+", 2),
+        (r"^\d+\.\d+\s+", 1),
+        (r"^\d+\.\s+", 0),
+        (r"^\d+\)\s+", 1),
+        (r"^\(\d+\)\s+", 2),
+        (r"^[①②③④⑤⑥⑦⑧⑨⑩]\s*", 3),
+        (r"^--\s+", 2),
+        (r"^-\s+", 1),
+    ]
+    for pattern, level in patterns:
+        if re.match(pattern, text):
+            return level, re.sub(pattern, "", text).strip()
+    return 0, text
+
+
 def note_to_cards(note_text, study_date, title):
     cards = []
     lines = [line.strip() for line in note_text.splitlines() if line.strip()]
-    tree_mode = []
+    outline = []
 
-    for raw in lines:
-        level = 0
-        text = raw.strip()
-
-        if re.match(r"^\d+\.\d+\.\d+\s+", text):
-            level = 2
-            text = re.sub(r"^\d+\.\d+\.\d+\s+", "", text).strip()
-        elif re.match(r"^\d+\.\d+\s+", text):
-            level = 1
-            text = re.sub(r"^\d+\.\d+\s+", "", text).strip()
-        elif re.match(r"^\d+\.\s+", text):
-            level = 0
-            text = re.sub(r"^\d+\.\s+", "", text).strip()
-        elif re.match(r"^\d+\)\s+", text):
-            level = 1
-            text = re.sub(r"^\d+\)\s+", "", text).strip()
-        elif re.match(r"^\(\d+\)\s+", text):
-            level = 2
-            text = re.sub(r"^\(\d+\)\s+", "", text).strip()
-        elif re.match(r"^[①②③④⑤⑥⑦⑧⑨⑩]\s*", text):
-            level = 2
-            text = re.sub(r"^[①②③④⑤⑥⑦⑧⑨⑩]\s*", "", text).strip()
-        elif text.startswith("-- "):
-            level = 2
-            text = text[3:].strip()
-        elif text.startswith("- "):
-            level = 1
-            text = text[2:].strip()
-
+    for line in lines:
+        level, text = parse_outline_line(line)
         if text:
-            tree_mode.append((level, text))
+            outline.append({"level": level, "text": text, "children": []})
 
-    has_hierarchy = any(level > 0 for level, _ in tree_mode)
-    if has_hierarchy:
-        main_to_subs = {}
-        sub_to_details = {}
-        main_orphan_details = {}
-        current_main = ""
-        current_sub = ""
-
-        for level, text in tree_mode:
-            if level == 0:
-                current_main = text
-                current_sub = ""
-                main_to_subs.setdefault(current_main, [])
-            elif level == 1:
-                if not current_main:
-                    continue
-                current_sub = text
-                if current_sub not in main_to_subs[current_main]:
-                    main_to_subs[current_main].append(current_sub)
-                sub_to_details.setdefault((current_main, current_sub), [])
+    has_outline = any(item["level"] > 0 for item in outline)
+    if has_outline:
+        stack = []
+        roots = []
+        for item in outline:
+            while stack and stack[-1]["level"] >= item["level"]:
+                stack.pop()
+            if stack:
+                stack[-1]["children"].append(item)
             else:
-                if not current_main:
-                    continue
-                if not current_sub:
-                    bucket = main_orphan_details.setdefault(current_main, [])
-                    if text not in bucket:
-                        bucket.append(text)
-                else:
-                    details = sub_to_details.setdefault((current_main, current_sub), [])
-                    if text not in details:
-                        details.append(text)
+                roots.append(item)
+            stack.append(item)
 
-        for main, subs in main_to_subs.items():
-            if subs:
+        def add_node_cards(node, path):
+            children = [child["text"] for child in node["children"]]
+            if children:
+                label = " > ".join(path + [node["text"]])
                 cards.append(
                     make_card(
                         study_date=study_date,
                         title=title,
-                        question=f"{main}의 하위 항목을 모두 쓰세요 (쉼표 구분)",
-                        answer=", ".join(subs),
+                        question=f"{label}의 하위 항목을 모두 쓰세요 (쉼표 구분)",
+                        answer=", ".join(children),
                         quiz_type="multi",
                     )
                 )
+            for child in node["children"]:
+                add_node_cards(child, path + [node["text"]])
 
-        for (main, sub), details in sub_to_details.items():
-            if details:
-                cards.append(
-                    make_card(
-                        study_date=study_date,
-                        title=title,
-                        question=f"{main} > {sub}의 세부 항목을 모두 쓰세요 (쉼표 구분)",
-                        answer=", ".join(details),
-                        quiz_type="multi",
-                    )
-                )
-
-        for main, details in main_orphan_details.items():
-            if details:
-                cards.append(
-                    make_card(
-                        study_date=study_date,
-                        title=title,
-                        question=f"{main}의 세부 항목을 모두 쓰세요 (쉼표 구분)",
-                        answer=", ".join(details),
-                        quiz_type="multi",
-                    )
-                )
+        for root in roots:
+            add_node_cards(root, [])
 
         if cards:
             return cards
@@ -243,13 +195,10 @@ def note_to_cards(note_text, study_date, title):
             continue
 
         if ":" in clean:
-            left, right = clean.split(":", 1)
-            keyword = left.strip()
-            desc = right.strip()
+            keyword, desc = [part.strip() for part in clean.split(":", 1)]
             if keyword and desc:
                 cards.append(make_card(study_date, title, f"{keyword}: ( )", desc, "blank"))
                 cards.append(make_card(study_date, title, f"{desc}\n위 설명에 해당하는 용어는?", keyword, "short"))
-                continue
 
     return cards
 
@@ -281,8 +230,7 @@ def hwpx_to_text(file_stream):
         xml_files.sort()
         for name in xml_files:
             try:
-                raw = zf.read(name)
-                root = ET.fromstring(raw)
+                root = ET.fromstring(zf.read(name))
             except Exception:
                 continue
             for elem in root.iter():
@@ -300,10 +248,326 @@ def index():
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>기술사 암기 공부</title>
+  <style>
+    :root{
+      --bg:#f7fafc; --card:#fff; --ink:#111827; --muted:#6b7280;
+      --line:#d8dee8; --accent:#0369a1; --ok:#15803d; --bad:#b91c1c;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);font-family:"Pretendard","Noto Sans KR","Apple SD Gothic Neo",sans-serif;color:var(--ink)}
+    .wrap{max-width:1080px;margin:0 auto;padding:14px}
+    header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:10px 0 14px;border-bottom:1px solid var(--line);margin-bottom:14px}
+    h1{font-size:22px;margin:0}
+    h2{font-size:16px;margin:0 0 10px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    section{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px}
+    .wide{grid-column:1 / -1}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    input,textarea,button{font-size:14px;border-radius:6px;border:1px solid var(--line);padding:10px}
+    input,textarea{min-width:160px;flex:1;background:#fff}
+    textarea{min-height:150px;resize:vertical;width:100%}
+    button{border:none;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
+    button.sub{background:#64748b}
+    button.ok{background:var(--ok)}
+    button.bad{background:var(--bad)}
+    .muted{color:var(--muted);font-size:13px}
+    .item{border:1px solid var(--line);border-radius:6px;padding:10px;margin-bottom:8px;background:#fbfdff}
+    .hidden{display:none}
+    .question{font-size:20px;font-weight:800;margin:8px 0 10px;white-space:pre-wrap}
+    @media(max-width:760px){.grid{grid-template-columns:1fr}header{display:block}}
+  </style>
 </head>
 <body>
-  <h1>기술사 암기 공부 앱</h1>
-  <p>배포 정상 확인용 간단 페이지입니다. API는 그대로 동작합니다.</p>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>기술사 암기 공부</h1>
+        <div class="muted">날짜별 노트, 파일 업로드, 다중정답 퀴즈</div>
+      </div>
+      <div id="stats" class="muted"></div>
+    </header>
+
+    <div class="grid">
+      <section>
+        <h2>노트 붙여넣기</h2>
+        <div class="row">
+          <input id="studyDate" type="date" />
+          <input id="noteTitle" placeholder="제목" />
+        </div>
+        <textarea id="noteText" placeholder="1. 화재안전기준
+1) 경보설비
+(1) 자동화재탐지설비
+① 감지기
+② 수신기"></textarea>
+        <button onclick="importNote()">문제 자동 생성</button>
+        <div id="importResult" class="muted"></div>
+      </section>
+
+      <section>
+        <h2>파일 업로드</h2>
+        <div class="row">
+          <input id="fileDate" type="date" />
+          <input id="fileTitle" placeholder="제목" />
+        </div>
+        <div class="row">
+          <input id="noteFile" type="file" accept=".hwpx,.txt,.md" />
+          <button onclick="uploadFileNote()">업로드</button>
+        </div>
+        <div id="fileUploadResult" class="muted"></div>
+      </section>
+
+      <section>
+        <h2>스토리형</h2>
+        <div class="row">
+          <input id="storyDate" type="date" />
+          <input id="storyTitle" placeholder="제목" />
+        </div>
+        <textarea id="storyText" placeholder="스토리 입력"></textarea>
+        <div class="row">
+          <input id="storyAnswer" placeholder="정답 목록, 쉼표 구분" />
+          <button onclick="addStoryQuiz()">추가</button>
+        </div>
+        <div id="storyResult" class="muted"></div>
+      </section>
+
+      <section>
+        <h2>앞글자형</h2>
+        <div class="row">
+          <input id="initialsDate" type="date" />
+          <input id="initialsTitle" placeholder="제목" />
+        </div>
+        <div class="row">
+          <input id="initialsText" placeholder="앞글자" />
+          <input id="initialsAnswer" placeholder="정답 목록, 쉼표 구분" />
+          <button onclick="addInitialsQuiz()">추가</button>
+        </div>
+        <div id="initialsResult" class="muted"></div>
+      </section>
+
+      <section class="wide">
+        <h2>날짜별 퀴즈</h2>
+        <div class="row">
+          <input id="quizDate" type="date" />
+          <button onclick="startQuiz(false)">랜덤 퀴즈</button>
+          <button class="sub" onclick="startQuiz(true)">오답 위주</button>
+        </div>
+        <div id="quizBox" class="hidden item">
+          <div id="quizMeta" class="muted"></div>
+          <div id="quizTitle" class="muted"></div>
+          <div id="quizQuestion" class="question"></div>
+          <input id="userAnswer" placeholder="정답 입력" />
+          <div class="row" style="margin-top:8px">
+            <button onclick="checkAnswer()">채점</button>
+            <button class="sub" onclick="showCorrect()">정답 보기</button>
+            <button class="ok" onclick="nextQuiz(true)">맞음 기록</button>
+            <button class="bad" onclick="nextQuiz(false)">틀림 기록</button>
+          </div>
+          <div id="judge" class="muted"></div>
+        </div>
+      </section>
+
+      <section class="wide">
+        <h2>등록 문제 목록</h2>
+        <div id="cards"></div>
+      </section>
+    </div>
+  </div>
+
+<script>
+let cards = [];
+let stats = {correct:0, wrong:0};
+let quizPool = [];
+let idx = 0;
+
+function todayStr(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function normalize(s){
+  return (s || '').toLowerCase().replace(/\\s+/g,'').trim();
+}
+
+function parseMulti(text){
+  return (text || '').split(/[,:\\n]/).map(v => normalize(v)).filter(Boolean).sort();
+}
+
+async function loadAll(){
+  const res = await fetch('/api/cards');
+  const data = await res.json();
+  cards = data.cards;
+  stats = data.stats;
+  renderStats();
+  renderCards();
+}
+
+function typeName(t){
+  return {blank:'괄호채우기', short:'단답형', story:'스토리형', initials:'앞글자형', multi:'다중정답형'}[t] || t || '기타';
+}
+
+function renderStats(){
+  const solved = stats.correct + stats.wrong;
+  const acc = solved ? (stats.correct * 100 / solved).toFixed(1) : '0.0';
+  document.getElementById('stats').innerText = `문제 ${cards.length}개 | 정답 ${stats.correct} | 오답 ${stats.wrong} | ${acc}%`;
+}
+
+function renderCards(){
+  const box = document.getElementById('cards');
+  if(!cards.length){
+    box.innerHTML = '<div class="muted">등록된 문제가 없습니다.</div>';
+    return;
+  }
+  box.innerHTML = cards
+    .sort((a,b)=> (b.study_date+b.created_at).localeCompare(a.study_date+a.created_at))
+    .map(c => `<div class="item"><strong>[${c.study_date}] ${escapeHtml(c.title || '(제목 없음)')}</strong><br>
+      <span class="muted">${typeName(c.quiz_type)} | 정답 ${c.correct_count} | 오답 ${c.wrong_count}</span>
+      <div style="margin-top:6px;white-space:pre-wrap">${escapeHtml(c.question)}</div>
+      <button class="sub" style="margin-top:8px" onclick="deleteCard('${c.id}')">삭제</button></div>`)
+    .join('');
+}
+
+async function postJson(url, payload){
+  const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+  const data = await res.json();
+  if(!res.ok) throw new Error(data.error || '처리 실패');
+  return data;
+}
+
+async function importNote(){
+  try{
+    const result = await postJson('/api/notes/import', {
+      study_date: document.getElementById('studyDate').value || todayStr(),
+      title: document.getElementById('noteTitle').value.trim(),
+      note_text: document.getElementById('noteText').value.trim()
+    });
+    document.getElementById('importResult').innerText = `생성 완료: ${result.created_count}문제`;
+    document.getElementById('noteText').value = '';
+    await loadAll();
+  }catch(e){ alert(e.message); }
+}
+
+async function addStoryQuiz(){
+  try{
+    await postJson('/api/quiz/story', {
+      study_date: document.getElementById('storyDate').value || todayStr(),
+      title: document.getElementById('storyTitle').value.trim(),
+      story_text: document.getElementById('storyText').value.trim(),
+      answer_text: document.getElementById('storyAnswer').value.trim()
+    });
+    document.getElementById('storyResult').innerText = '추가 완료';
+    document.getElementById('storyText').value = '';
+    document.getElementById('storyAnswer').value = '';
+    await loadAll();
+  }catch(e){ alert(e.message); }
+}
+
+async function addInitialsQuiz(){
+  try{
+    await postJson('/api/quiz/initials', {
+      study_date: document.getElementById('initialsDate').value || todayStr(),
+      title: document.getElementById('initialsTitle').value.trim(),
+      initials_text: document.getElementById('initialsText').value.trim(),
+      answer_text: document.getElementById('initialsAnswer').value.trim()
+    });
+    document.getElementById('initialsResult').innerText = '추가 완료';
+    document.getElementById('initialsText').value = '';
+    document.getElementById('initialsAnswer').value = '';
+    await loadAll();
+  }catch(e){ alert(e.message); }
+}
+
+async function uploadFileNote(){
+  const fileInput = document.getElementById('noteFile');
+  if(!fileInput.files.length){ alert('파일을 선택해주세요.'); return; }
+  const form = new FormData();
+  form.append('study_date', document.getElementById('fileDate').value || todayStr());
+  form.append('title', document.getElementById('fileTitle').value.trim());
+  form.append('file', fileInput.files[0]);
+  const res = await fetch('/api/notes/upload', {method:'POST', body:form});
+  const result = await res.json();
+  if(!res.ok){ alert(result.error || '업로드 실패'); return; }
+  document.getElementById('fileUploadResult').innerText = `생성 완료: ${result.created_count}문제`;
+  fileInput.value = '';
+  await loadAll();
+}
+
+function startQuiz(wrongOnly){
+  const date = document.getElementById('quizDate').value;
+  if(!date){ alert('날짜를 선택해주세요.'); return; }
+  let pool = cards.filter(c => c.study_date === date);
+  if(wrongOnly) pool = pool.filter(c => c.wrong_count > c.correct_count);
+  if(!pool.length){ alert('해당 날짜 문제가 없습니다.'); return; }
+  quizPool = shuffle(pool);
+  idx = 0;
+  document.getElementById('quizBox').classList.remove('hidden');
+  renderQuiz();
+}
+
+function renderQuiz(){
+  if(idx >= quizPool.length){
+    alert('퀴즈 완료');
+    document.getElementById('quizBox').classList.add('hidden');
+    return;
+  }
+  const c = quizPool[idx];
+  document.getElementById('quizMeta').innerText = `${idx + 1} / ${quizPool.length} | ${typeName(c.quiz_type)}`;
+  document.getElementById('quizTitle').innerText = c.title || '';
+  document.getElementById('quizQuestion').innerText = c.question;
+  document.getElementById('userAnswer').value = '';
+  document.getElementById('judge').innerText = '';
+}
+
+function checkAnswer(){
+  const c = quizPool[idx];
+  const input = document.getElementById('userAnswer').value;
+  let ok = false;
+  if(c.quiz_type === 'multi'){
+    const mine = parseMulti(input);
+    const answer = parseMulti(c.answer);
+    ok = mine.length === answer.length && mine.every((v, i) => v === answer[i]);
+  }else{
+    ok = normalize(input) === normalize(c.answer);
+  }
+  document.getElementById('judge').innerText = ok ? '정답입니다.' : `오답입니다. 정답: ${c.answer}`;
+}
+
+function showCorrect(){
+  const c = quizPool[idx];
+  document.getElementById('judge').innerText = `정답: ${c.answer}`;
+}
+
+async function nextQuiz(correct){
+  const c = quizPool[idx];
+  await postJson('/api/quiz-result', {id:c.id, correct});
+  idx += 1;
+  await loadAll();
+  renderQuiz();
+}
+
+async function deleteCard(id){
+  await fetch('/api/cards/' + encodeURIComponent(id), {method:'DELETE'});
+  await loadAll();
+}
+
+function shuffle(arr){
+  const copy = [...arr];
+  for(let i=copy.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function escapeHtml(text){
+  return (text || '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
+}
+
+document.getElementById('studyDate').value = todayStr();
+document.getElementById('fileDate').value = todayStr();
+document.getElementById('storyDate').value = todayStr();
+document.getElementById('initialsDate').value = todayStr();
+loadAll();
+</script>
 </body>
 </html>
 """
