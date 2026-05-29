@@ -128,7 +128,6 @@ def make_card(study_date, title, question, answer, quiz_type):
     }
 
 
-https://github.com/a01097701119-cmd/-
 
     for line in lines:
         clean = re.sub(r"^[\-*0-9\.\)\s]+", "", line).strip()
