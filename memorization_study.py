@@ -1,4 +1,4 @@
-﻿import json
+import json
 import os
 import random
 import re
@@ -289,11 +289,13 @@ def note_to_cards(note_text, study_date, title):
             )
 
     return cards
+
+
 def create_story_card(study_date, title, story_text, answer_text):
     return make_card(
         study_date=study_date,
         title=title,
-        question=f"?ㅽ넗由?鍮덉뭏/?쒖꽌 留욎텛湲?n{story_text}",
+        question=f"스토리 빈칸/순서 맞추기\n{story_text}",
         answer=answer_text,
         quiz_type="story",
     )
@@ -303,7 +305,7 @@ def create_initials_card(study_date, title, initials_text, answer_text):
     return make_card(
         study_date=study_date,
         title=title,
-        question=f"?욊????뺤옣?섍린: {initials_text}",
+        question=f"앞글자 확장하기: {initials_text}",
         answer=answer_text,
         quiz_type="initials",
     )
@@ -338,7 +340,7 @@ def index():
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>湲곗닠???붽린 怨듬?</title>
+  <title>기술사 암기 공부</title>
   <style>
     :root{
       --card:#fff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
@@ -367,110 +369,109 @@ def index():
 <body>
   <div class="wrap">
     <div class="panel">
-      <h1>湲곗닠???붽린 怨듬? ??/h1>
-      <div class="muted">?붿빟 ?쒕툕?명듃瑜??좎쭨蹂꾨줈 ?щ━硫??댁쫰媛 ?먮룞 ?앹꽦?⑸땲??</div>
+      <h1>기술사 암기 공부 앱</h1>
+      <div class="muted">요약 서브노트를 날짜별로 올리면 퀴즈가 자동 생성됩니다.</div>
     </div>
 
     <div class="panel">
-      <h2>?붿빟 ?쒕툕?명듃 ?щ━湲?/h2>
+      <h2>요약 서브노트 올리기</h2>
       <div class="row">
         <input id="studyDate" type="date" />
-        <input id="noteTitle" placeholder="?명듃 ?쒕ぉ (?? ?뚮갑?ㅻ퉬 ?대줎)" />
+        <input id="noteTitle" placeholder="노트 제목 (예: 소방설비 이론)" />
       </div>
       <div class="row" style="margin-top:8px">
-        <textarea id="noteText" placeholder="?덉떆 1) ?⑹뼱: ?ㅻ챸
-?댄솕援ъ“: ?붿옱 ???쇱젙 ?쒓컙 援ъ“ ?덉쟾?깆쓣 ?좎??섎뒗 援ъ“
-?쇰궃怨꾪쉷: ?ъ떎?먯쓽 ?덉쟾????쇰? ?꾪븳 怨꾪쉷
+        <textarea id="noteText" placeholder="예시 1) 용어: 설명
+내화구조: 화재 시 일정 시간 구조 안전성을 유지하는 구조
+피난계획: 재실자의 안전한 대피를 위한 계획
 
-?덉떆 2) 怨꾩링??沅뚯옣)
-?붿옱?덉쟾湲곗?
-- 寃쎈낫?ㅻ퉬
--- ?먮룞?붿옱?먯??ㅻ퉬
--- 鍮꾩긽寃쎈낫?ㅻ퉬
-- ?뚰솕?ㅻ퉬
--- ?ㅽ봽留곹겢?ъ꽕鍮?></textarea>
+예시 2) 번호 계층형(권장)
+1. 화재안전기준
+1) 경보설비
+(1) 자동화재탐지설비
+① 감지기
+② 수신기"></textarea>
       </div>
       <div class="row" style="margin-top:8px">
-        <button onclick="importNote()">?명듃 ?낅줈??+ ?댁쫰 ?먮룞 ?앹꽦</button>
+        <button onclick="importNote()">노트 업로드 + 퀴즈 자동 생성</button>
       </div>
       <div id="importResult" class="muted" style="margin-top:8px"></div>
     </div>
 
     <div class="panel">
-      <h2>?ㅽ넗由ы삎 ?댁쫰 ?깅줉</h2>
+      <h2>스토리형 퀴즈 등록</h2>
       <div class="row">
         <input id="storyDate" type="date" />
-        <input id="storyTitle" placeholder="?쒕ぉ (?? ????쒕굹由ъ삤)" />
+        <input id="storyTitle" placeholder="제목 (예: 대피 시나리오)" />
       </div>
       <div class="row" style="margin-top:8px">
-        <textarea id="storyText" placeholder="?ㅽ넗由??쒖닠臾? ?낅젰"></textarea>
+        <textarea id="storyText" placeholder="스토리(서술문) 입력"></textarea>
       </div>
       <div class="row" style="margin-top:8px">
-        <input id="storyAnswer" placeholder="?뺣떟 紐⑸줉 (?? ?좉퀬, 珥덇린?뚰솕, ??쇱쑀?? ?몄썝?먭?)" />
-        <button onclick="addStoryQuiz()">?ㅽ넗由ы삎 異붽?</button>
+        <input id="storyAnswer" placeholder="정답 목록 (예: 신고, 초기소화, 대피유도, 인원점검)" />
+        <button onclick="addStoryQuiz()">스토리형 추가</button>
       </div>
       <div id="storyResult" class="muted" style="margin-top:8px"></div>
     </div>
 
     <div class="panel">
-      <h2>?욊??먰삎 ?댁쫰 ?깅줉</h2>
+      <h2>앞글자형 퀴즈 등록</h2>
       <div class="row">
         <input id="initialsDate" type="date" />
-        <input id="initialsTitle" placeholder="?쒕ぉ (?? ?먭? ?덉감)" />
+        <input id="initialsTitle" placeholder="제목 (예: 점검 절차)" />
       </div>
       <div class="row" style="margin-top:8px">
-        <input id="initialsText" placeholder="?욊???(?? ?좎큹???" />
-        <input id="initialsAnswer" placeholder="?뺣떟 紐⑸줉 (?? ?좉퀬, 珥덇린?뚰솕, ??쇱쑀?? ?몄썝?먭?)" />
-        <button onclick="addInitialsQuiz()">?욊??먰삎 異붽?</button>
+        <input id="initialsText" placeholder="앞글자 (예: 신초대인)" />
+        <input id="initialsAnswer" placeholder="정답 목록 (예: 신고, 초기소화, 대피유도, 인원점검)" />
+        <button onclick="addInitialsQuiz()">앞글자형 추가</button>
       </div>
       <div id="initialsResult" class="muted" style="margin-top:8px"></div>
     </div>
 
     <div class="panel">
-      <h2>?뚯씪濡??낅줈??(PC/紐⑤컮??</h2>
-      <div class="muted">吏???뺤떇: .hwpx, .txt, .md</div>
+      <h2>파일로 업로드 (PC/모바일)</h2>
+      <div class="muted">지원 형식: .hwpx, .txt, .md</div>
       <div class="row" style="margin-top:8px">
         <input id="fileDate" type="date" />
-        <input id="fileTitle" placeholder="?뚯씪 ?명듃 ?쒕ぉ (?좏깮)" />
+        <input id="fileTitle" placeholder="파일 노트 제목 (선택)" />
       </div>
       <div class="row" style="margin-top:8px">
         <input id="noteFile" type="file" accept=".hwpx,.txt,.md" />
-        <button onclick="uploadFileNote()">?뚯씪 ?낅줈??+ ?먮룞 臾몄젣 ?앹꽦</button>
+        <button onclick="uploadFileNote()">파일 업로드 + 자동 문제 생성</button>
       </div>
       <div id="fileUploadResult" class="muted" style="margin-top:8px"></div>
     </div>
 
     <div class="panel">
-      <h2>?좎쭨蹂??댁쫰</h2>
+      <h2>날짜별 퀴즈</h2>
       <div class="row">
         <input id="quizDate" type="date" />
-        <button onclick="startQuiz(false)">?대떦 ?좎쭨 ?쒕뜡 ?댁쫰</button>
-        <button class="sub" onclick="startQuiz(true)">?ㅻ떟 ?꾩＜</button>
+        <button onclick="startQuiz(false)">해당 날짜 랜덤 퀴즈</button>
+        <button class="sub" onclick="startQuiz(true)">오답 위주</button>
       </div>
       <div id="quizBox" class="hidden" style="margin-top:10px;border:1px dashed #cbd5e1;border-radius:14px;padding:12px">
         <div id="quizMeta" class="muted"></div>
         <div id="quizTitle" class="muted" style="margin-top:6px"></div>
         <div id="quizQuestion" class="q"></div>
-        <input id="userAnswer" placeholder="?뺣떟 ?낅젰" />
+        <input id="userAnswer" placeholder="정답 입력" />
         <div class="row" style="margin-top:8px">
-          <button onclick="checkAnswer()">梨꾩젏</button>
-          <button class="sub" onclick="showCorrect()">?뺣떟 蹂닿린</button>
+          <button onclick="checkAnswer()">채점</button>
+          <button class="sub" onclick="showCorrect()">정답 보기</button>
         </div>
         <div id="judge" class="muted" style="margin-top:8px"></div>
         <div class="row" style="margin-top:10px">
-          <button class="ok" onclick="nextQuiz(true)">留욎쓬 湲곕줉</button>
-          <button class="bad" onclick="nextQuiz(false)">?由?湲곕줉</button>
+          <button class="ok" onclick="nextQuiz(true)">맞음 기록</button>
+          <button class="bad" onclick="nextQuiz(false)">틀림 기록</button>
         </div>
       </div>
     </div>
 
     <div class="panel">
-      <h2>?듦퀎</h2>
+      <h2>통계</h2>
       <div id="stats" class="muted"></div>
     </div>
 
     <div class="panel">
-      <h2>?깅줉 臾몄젣 紐⑸줉</h2>
+      <h2>등록 문제 목록</h2>
       <div id="cards"></div>
     </div>
   </div>
@@ -506,13 +507,13 @@ function renderStats(){
   const solved = stats.correct + stats.wrong;
   const acc = solved ? (stats.correct * 100 / solved).toFixed(1) : '0.0';
   document.getElementById('stats').innerText =
-    `?꾩쟻 ?뺣떟 ${stats.correct} | ?꾩쟻 ?ㅻ떟 ${stats.wrong} | ?뺣떟瑜?${acc}% | 珥?臾몄젣 ${cards.length}媛?;
+    `누적 정답 ${stats.correct} | 누적 오답 ${stats.wrong} | 정답률 ${acc}% | 총 문제 ${cards.length}개`;
 }
 
 function renderCards(){
   const box = document.getElementById('cards');
   if(!cards.length){
-    box.innerHTML = '<div class="muted">?깅줉??臾몄젣媛 ?놁뒿?덈떎.</div>';
+    box.innerHTML = '<div class="muted">등록된 문제가 없습니다.</div>';
     return;
   }
   const quizTypeName = (q) => {
@@ -527,10 +528,10 @@ function renderCards(){
     .sort((a,b)=> (b.study_date+b.created_at).localeCompare(a.study_date+a.created_at))
     .map(c => `
       <div class="item">
-        <strong>[${c.study_date}] ${escapeHtml(c.title || '(?쒕ぉ ?놁쓬)')}</strong><br/>
-        <span class="muted">${quizTypeName(c.quiz_type)} | ?뺣떟 ${c.correct_count} | ?ㅻ떟 ${c.wrong_count}</span>
+        <strong>[${c.study_date}] ${escapeHtml(c.title || '(제목 없음)')}</strong><br/>
+        <span class="muted">${quizTypeName(c.quiz_type)} | 정답 ${c.correct_count} | 오답 ${c.wrong_count}</span>
         <div style="margin-top:6px">${escapeHtml(c.question)}</div>
-        <button class="sub" style="margin-top:8px" onclick="deleteCard('${c.id}')">??젣</button>
+        <button class="sub" style="margin-top:8px" onclick="deleteCard('${c.id}')">삭제</button>
       </div>
     `).join('');
 }
@@ -540,7 +541,7 @@ async function importNote(){
   const title = document.getElementById('noteTitle').value.trim();
   const note_text = document.getElementById('noteText').value.trim();
   if(!note_text){
-    alert('?명듃 ?댁슜???낅젰?댁＜?몄슂.');
+    alert('노트 내용을 입력해주세요.');
     return;
   }
   const res = await fetch('/api/notes/import', {
@@ -550,10 +551,10 @@ async function importNote(){
   });
   const result = await res.json();
   if(!res.ok){
-    alert(result.error || '?낅줈?쒖뿉 ?ㅽ뙣?덉뒿?덈떎.');
+    alert(result.error || '업로드에 실패했습니다.');
     return;
   }
-  document.getElementById('importResult').innerText = `?낅줈???꾨즺: ${result.created_count}臾몄젣媛 ?앹꽦?섏뿀?듬땲??`;
+  document.getElementById('importResult').innerText = `업로드 완료: ${result.created_count}문제가 생성되었습니다.`;
   document.getElementById('noteText').value = '';
   await loadAll();
 }
@@ -564,7 +565,7 @@ async function addStoryQuiz(){
   const story_text = document.getElementById('storyText').value.trim();
   const answer_text = document.getElementById('storyAnswer').value.trim();
   if(!story_text || !answer_text){
-    alert('?ㅽ넗由ъ? ?뺣떟???낅젰?댁＜?몄슂.');
+    alert('스토리와 정답을 입력해주세요.');
     return;
   }
   const res = await fetch('/api/quiz/story', {
@@ -574,10 +575,10 @@ async function addStoryQuiz(){
   });
   const result = await res.json();
   if(!res.ok){
-    alert(result.error || '異붽? ?ㅽ뙣');
+    alert(result.error || '추가 실패');
     return;
   }
-  document.getElementById('storyResult').innerText = '?ㅽ넗由ы삎 ?댁쫰 1媛?異붽? ?꾨즺';
+  document.getElementById('storyResult').innerText = '스토리형 퀴즈 1개 추가 완료';
   document.getElementById('storyText').value = '';
   document.getElementById('storyAnswer').value = '';
   await loadAll();
@@ -589,7 +590,7 @@ async function addInitialsQuiz(){
   const initials_text = document.getElementById('initialsText').value.trim();
   const answer_text = document.getElementById('initialsAnswer').value.trim();
   if(!initials_text || !answer_text){
-    alert('?욊??먯? ?뺣떟???낅젰?댁＜?몄슂.');
+    alert('앞글자와 정답을 입력해주세요.');
     return;
   }
   const res = await fetch('/api/quiz/initials', {
@@ -599,10 +600,10 @@ async function addInitialsQuiz(){
   });
   const result = await res.json();
   if(!res.ok){
-    alert(result.error || '異붽? ?ㅽ뙣');
+    alert(result.error || '추가 실패');
     return;
   }
-  document.getElementById('initialsResult').innerText = '?욊??먰삎 ?댁쫰 1媛?異붽? ?꾨즺';
+  document.getElementById('initialsResult').innerText = '앞글자형 퀴즈 1개 추가 완료';
   document.getElementById('initialsText').value = '';
   document.getElementById('initialsAnswer').value = '';
   await loadAll();
@@ -613,7 +614,7 @@ async function uploadFileNote(){
   const title = document.getElementById('fileTitle').value.trim();
   const fileInput = document.getElementById('noteFile');
   if(!fileInput.files || !fileInput.files.length){
-    alert('?낅줈?쒗븷 ?뚯씪???좏깮?댁＜?몄슂.');
+    alert('업로드할 파일을 선택해주세요.');
     return;
   }
   const form = new FormData();
@@ -621,17 +622,13 @@ async function uploadFileNote(){
   form.append('title', title);
   form.append('file', fileInput.files[0]);
 
-  const res = await fetch('/api/notes/upload', {
-    method:'POST',
-    body: form
-  });
+  const res = await fetch('/api/notes/upload', { method:'POST', body: form });
   const result = await res.json();
   if(!res.ok){
-    alert(result.error || '?뚯씪 ?낅줈?쒖뿉 ?ㅽ뙣?덉뒿?덈떎.');
+    alert(result.error || '파일 업로드에 실패했습니다.');
     return;
   }
-  document.getElementById('fileUploadResult').innerText =
-    `?낅줈???꾨즺: ${result.created_count}臾몄젣媛 ?앹꽦?섏뿀?듬땲??`;
+  document.getElementById('fileUploadResult').innerText = `업로드 완료: ${result.created_count}문제가 생성되었습니다.`;
   fileInput.value = '';
   await loadAll();
 }
@@ -644,7 +641,7 @@ async function deleteCard(id){
 function startQuiz(wrongOnly){
   const date = document.getElementById('quizDate').value;
   if(!date){
-    alert('?댁쫰 ?좎쭨瑜?癒쇱? ?좏깮?댁＜?몄슂.');
+    alert('퀴즈 날짜를 먼저 선택해주세요.');
     return;
   }
   let pool = cards.filter(c => c.study_date === date);
@@ -652,7 +649,7 @@ function startQuiz(wrongOnly){
     pool = pool.filter(c => c.wrong_count > c.correct_count);
   }
   if(!pool.length){
-    alert('?대떦 ?좎쭨 臾몄젣媛 ?놁뒿?덈떎.');
+    alert('해당 날짜 문제가 없습니다.');
     return;
   }
   quizPool = shuffle(pool);
@@ -682,7 +679,7 @@ function renderQuiz(){
 
 function parseMulti(text){
   return (text || '')
-    .split(/[,:\n]/)
+    .split(/[,:\\n]/)
     .map(v => normalize(v))
     .filter(v => !!v)
     .sort();
@@ -701,9 +698,10 @@ function checkAnswer(){
   }
   document.getElementById('judge').innerText = ok ? '정답입니다.' : `오답입니다. 정답: ${c.answer}`;
 }
+
 function showCorrect(){
   const c = quizPool[idx];
-  document.getElementById('judge').innerText = `?뺣떟: ${c.answer}`;
+  document.getElementById('judge').innerText = `정답: ${c.answer}`;
 }
 
 async function nextQuiz(correct){
@@ -771,7 +769,7 @@ def api_notes_import():
 
     new_cards = note_to_cards(note_text, study_date, title)
     if not new_cards:
-        return jsonify({"ok": False, "error": "?앹꽦 媛?ν븳 臾몄옣???놁뒿?덈떎. 以꾨컮轅덉쑝濡??댁슜???섎닠 ?낅젰?댁＜?몄슂."}), 400
+        return jsonify({"ok": False, "error": "생성 가능한 문장이 없습니다. 줄바꿈으로 나눠 입력해주세요."}), 400
 
     data = load_data()
     ensure_schema(data)
@@ -829,17 +827,17 @@ def api_notes_upload():
         elif filename.endswith(".txt") or filename.endswith(".md"):
             note_text = upload.read().decode("utf-8", errors="ignore")
         else:
-            return jsonify({"ok": False, "error": "吏?먰븯吏 ?딅뒗 ?뚯씪 ?뺤떇?낅땲?? (.hwpx, .txt, .md)"}), 400
+            return jsonify({"ok": False, "error": "지원하지 않는 파일 형식입니다. (.hwpx, .txt, .md)"}), 400
     except Exception:
-        return jsonify({"ok": False, "error": "?뚯씪???쎈뒗 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎."}), 400
+        return jsonify({"ok": False, "error": "파일을 읽는 중 오류가 발생했습니다."}), 400
 
     note_text = (note_text or "").strip()
     if not note_text:
-        return jsonify({"ok": False, "error": "?뚯씪?먯꽌 ?띿뒪?몃? 李얠? 紐삵뻽?듬땲??"}), 400
+        return jsonify({"ok": False, "error": "파일에서 텍스트를 찾지 못했습니다."}), 400
 
     new_cards = note_to_cards(note_text, study_date, title)
     if not new_cards:
-        return jsonify({"ok": False, "error": "?앹꽦 媛?ν븳 臾몄옣??李얠? 紐삵뻽?듬땲??"}), 400
+        return jsonify({"ok": False, "error": "생성 가능한 문장을 찾지 못했습니다."}), 400
 
     data = load_data()
     ensure_schema(data)
@@ -891,6 +889,3 @@ def api_quiz_result():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
     app.run(host="0.0.0.0", port=port, debug=False)
-
-
-
