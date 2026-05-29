@@ -124,6 +124,104 @@ def make_card(study_date, title, question, answer, quiz_type):
 def note_to_cards(note_text, study_date, title):
     cards = []
     lines = [line.strip() for line in note_text.splitlines() if line.strip()]
+    tree_mode = []
+
+    # 계층형 입력 우선 처리:
+    # 대제목
+    # - 소제목
+    # -- 세부제목
+    for raw in lines:
+        level = 0
+        text = raw.strip()
+        if re.match(r"^\d+\.\d+\.\d+\s+", text):
+            level = 2
+            text = re.sub(r"^\d+\.\d+\.\d+\s+", "", text).strip()
+        elif re.match(r"^\d+\.\d+\s+", text):
+            level = 1
+            text = re.sub(r"^\d+\.\d+\s+", "", text).strip()
+        elif re.match(r"^\d+\.\s+", text):
+            level = 0
+            text = re.sub(r"^\d+\.\s+", "", text).strip()
+        elif re.match(r"^\d+\)\s+", text):
+            level = 1
+            text = re.sub(r"^\d+\)\s+", "", text).strip()
+        elif re.match(r"^\(\d+\)\s+", text):
+            level = 2
+            text = re.sub(r"^\(\d+\)\s+", "", text).strip()
+        elif re.match(r"^[①②③④⑤⑥⑦⑧⑨⑩]\s*", text):
+            level = 2
+            text = re.sub(r"^[①②③④⑤⑥⑦⑧⑨⑩]\s*", "", text).strip()
+        elif text.startswith("-- "):
+            level = 2
+            text = text[3:].strip()
+        elif text.startswith("- "):
+            level = 1
+            text = text[2:].strip()
+        else:
+            level = 0
+            text = text.strip()
+        if text:
+            tree_mode.append((level, text))
+
+    has_hierarchy = any(level > 0 for level, _ in tree_mode)
+    if has_hierarchy:
+        current_main = ""
+        current_sub = ""
+        seen_main = set()
+        seen_sub = set()
+        seen_detail = set()
+
+        for level, text in tree_mode:
+            if level == 0:
+                current_main = text
+                current_sub = ""
+                if current_main not in seen_main:
+                    cards.append(
+                        make_card(
+                            study_date=study_date,
+                            title=title,
+                            question="( )",
+                            answer=current_main,
+                            quiz_type="blank",
+                        )
+                    )
+                    seen_main.add(current_main)
+            elif level == 1:
+                if not current_main:
+                    current_main = "분류"
+                current_sub = text
+                key = f"{current_main}::{current_sub}"
+                if key not in seen_sub:
+                    cards.append(
+                        make_card(
+                            study_date=study_date,
+                            title=title,
+                            question=f"{current_main}의 소제목: ( )",
+                            answer=current_sub,
+                            quiz_type="blank",
+                        )
+                    )
+                    seen_sub.add(key)
+            else:
+                if not current_main:
+                    current_main = "분류"
+                if not current_sub:
+                    current_sub = "하위 항목"
+                key = f"{current_main}::{current_sub}::{text}"
+                if key not in seen_detail:
+                    cards.append(
+                        make_card(
+                            study_date=study_date,
+                            title=title,
+                            question=f"{current_main} > {current_sub}의 세부제목: ( )",
+                            answer=text,
+                            quiz_type="blank",
+                        )
+                    )
+                    seen_detail.add(key)
+
+        if cards:
+            return cards
 
     for line in lines:
         clean = re.sub(r"^[\-*0-9\.\)\s]+", "", line).strip()
@@ -179,6 +277,26 @@ def note_to_cards(note_text, study_date, title):
             )
 
     return cards
+
+
+def create_story_card(study_date, title, story_text, answer_text):
+    return make_card(
+        study_date=study_date,
+        title=title,
+        question=f"스토리 빈칸/순서 맞추기\n{story_text}",
+        answer=answer_text,
+        quiz_type="story",
+    )
+
+
+def create_initials_card(study_date, title, initials_text, answer_text):
+    return make_card(
+        study_date=study_date,
+        title=title,
+        question=f"앞글자 확장하기: {initials_text}",
+        answer=answer_text,
+        quiz_type="initials",
+    )
 
 
 def hwpx_to_text(file_stream):
@@ -250,15 +368,52 @@ def index():
         <input id="noteTitle" placeholder="노트 제목 (예: 소방설비 이론)" />
       </div>
       <div class="row" style="margin-top:8px">
-        <textarea id="noteText" placeholder="예시)
+        <textarea id="noteText" placeholder="예시 1) 용어: 설명
 내화구조: 화재 시 일정 시간 구조 안전성을 유지하는 구조
 피난계획: 재실자의 안전한 대피를 위한 계획
-방화구획: 화염과 연기의 확산을 방지하기 위한 구획"></textarea>
+
+예시 2) 계층형(권장)
+화재안전기준
+- 경보설비
+-- 자동화재탐지설비
+-- 비상경보설비
+- 소화설비
+-- 스프링클러설비"></textarea>
       </div>
       <div class="row" style="margin-top:8px">
         <button onclick="importNote()">노트 업로드 + 퀴즈 자동 생성</button>
       </div>
       <div id="importResult" class="muted" style="margin-top:8px"></div>
+    </div>
+
+    <div class="panel">
+      <h2>스토리형 퀴즈 등록</h2>
+      <div class="row">
+        <input id="storyDate" type="date" />
+        <input id="storyTitle" placeholder="제목 (예: 대피 시나리오)" />
+      </div>
+      <div class="row" style="margin-top:8px">
+        <textarea id="storyText" placeholder="스토리(서술문) 입력"></textarea>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input id="storyAnswer" placeholder="정답 목록 (예: 신고, 초기소화, 대피유도, 인원점검)" />
+        <button onclick="addStoryQuiz()">스토리형 추가</button>
+      </div>
+      <div id="storyResult" class="muted" style="margin-top:8px"></div>
+    </div>
+
+    <div class="panel">
+      <h2>앞글자형 퀴즈 등록</h2>
+      <div class="row">
+        <input id="initialsDate" type="date" />
+        <input id="initialsTitle" placeholder="제목 (예: 점검 절차)" />
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input id="initialsText" placeholder="앞글자 (예: 신초대인)" />
+        <input id="initialsAnswer" placeholder="정답 목록 (예: 신고, 초기소화, 대피유도, 인원점검)" />
+        <button onclick="addInitialsQuiz()">앞글자형 추가</button>
+      </div>
+      <div id="initialsResult" class="muted" style="margin-top:8px"></div>
     </div>
 
     <div class="panel">
@@ -350,12 +505,19 @@ function renderCards(){
     box.innerHTML = '<div class="muted">등록된 문제가 없습니다.</div>';
     return;
   }
+  const quizTypeName = (q) => {
+    if(q === 'blank') return '괄호채우기';
+    if(q === 'short') return '단답형';
+    if(q === 'story') return '스토리형';
+    if(q === 'initials') return '앞글자형';
+    return q || '기타';
+  };
   box.innerHTML = cards
     .sort((a,b)=> (b.study_date+b.created_at).localeCompare(a.study_date+a.created_at))
     .map(c => `
       <div class="item">
         <strong>[${c.study_date}] ${escapeHtml(c.title || '(제목 없음)')}</strong><br/>
-        <span class="muted">${c.quiz_type === 'blank' ? '괄호채우기' : '단답형'} | 정답 ${c.correct_count} | 오답 ${c.wrong_count}</span>
+        <span class="muted">${quizTypeName(c.quiz_type)} | 정답 ${c.correct_count} | 오답 ${c.wrong_count}</span>
         <div style="margin-top:6px">${escapeHtml(c.question)}</div>
         <button class="sub" style="margin-top:8px" onclick="deleteCard('${c.id}')">삭제</button>
       </div>
@@ -382,6 +544,56 @@ async function importNote(){
   }
   document.getElementById('importResult').innerText = `업로드 완료: ${result.created_count}문제가 생성되었습니다.`;
   document.getElementById('noteText').value = '';
+  await loadAll();
+}
+
+async function addStoryQuiz(){
+  const study_date = document.getElementById('storyDate').value || todayStr();
+  const title = document.getElementById('storyTitle').value.trim();
+  const story_text = document.getElementById('storyText').value.trim();
+  const answer_text = document.getElementById('storyAnswer').value.trim();
+  if(!story_text || !answer_text){
+    alert('스토리와 정답을 입력해주세요.');
+    return;
+  }
+  const res = await fetch('/api/quiz/story', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({study_date, title, story_text, answer_text})
+  });
+  const result = await res.json();
+  if(!res.ok){
+    alert(result.error || '추가 실패');
+    return;
+  }
+  document.getElementById('storyResult').innerText = '스토리형 퀴즈 1개 추가 완료';
+  document.getElementById('storyText').value = '';
+  document.getElementById('storyAnswer').value = '';
+  await loadAll();
+}
+
+async function addInitialsQuiz(){
+  const study_date = document.getElementById('initialsDate').value || todayStr();
+  const title = document.getElementById('initialsTitle').value.trim();
+  const initials_text = document.getElementById('initialsText').value.trim();
+  const answer_text = document.getElementById('initialsAnswer').value.trim();
+  if(!initials_text || !answer_text){
+    alert('앞글자와 정답을 입력해주세요.');
+    return;
+  }
+  const res = await fetch('/api/quiz/initials', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({study_date, title, initials_text, answer_text})
+  });
+  const result = await res.json();
+  if(!res.ok){
+    alert(result.error || '추가 실패');
+    return;
+  }
+  document.getElementById('initialsResult').innerText = '앞글자형 퀴즈 1개 추가 완료';
+  document.getElementById('initialsText').value = '';
+  document.getElementById('initialsAnswer').value = '';
   await loadAll();
 }
 
@@ -445,7 +657,11 @@ function renderQuiz(){
     return;
   }
   const c = quizPool[idx];
-  document.getElementById('quizMeta').innerText = `${idx + 1} / ${quizPool.length} | ${c.quiz_type === 'blank' ? '괄호채우기' : '단답형'}`;
+  let typeName = '단답형';
+  if(c.quiz_type === 'blank') typeName = '괄호채우기';
+  if(c.quiz_type === 'story') typeName = '스토리형';
+  if(c.quiz_type === 'initials') typeName = '앞글자형';
+  document.getElementById('quizMeta').innerText = `${idx + 1} / ${quizPool.length} | ${typeName}`;
   document.getElementById('quizTitle').innerText = c.title || '';
   document.getElementById('quizQuestion').innerText = c.question;
   document.getElementById('userAnswer').value = '';
@@ -496,6 +712,8 @@ function escapeHtml(text){
 
 document.getElementById('studyDate').value = todayStr();
 document.getElementById('fileDate').value = todayStr();
+document.getElementById('storyDate').value = todayStr();
+document.getElementById('initialsDate').value = todayStr();
 loadAll();
 </script>
 </body>
@@ -534,6 +752,40 @@ def api_notes_import():
     data["cards"].extend(new_cards)
     save_data(data)
     return jsonify({"ok": True, "created_count": len(new_cards)})
+
+
+@app.post("/api/quiz/story")
+def api_quiz_story():
+    payload = request.get_json(silent=True) or {}
+    study_date = (payload.get("study_date") or datetime.now().strftime("%Y-%m-%d")).strip()
+    title = (payload.get("title") or "").strip()
+    story_text = (payload.get("story_text") or "").strip()
+    answer_text = (payload.get("answer_text") or "").strip()
+    if not story_text or not answer_text:
+        return jsonify({"ok": False, "error": "story_text and answer_text required"}), 400
+
+    data = load_data()
+    ensure_schema(data)
+    data["cards"].append(create_story_card(study_date, title, story_text, answer_text))
+    save_data(data)
+    return jsonify({"ok": True})
+
+
+@app.post("/api/quiz/initials")
+def api_quiz_initials():
+    payload = request.get_json(silent=True) or {}
+    study_date = (payload.get("study_date") or datetime.now().strftime("%Y-%m-%d")).strip()
+    title = (payload.get("title") or "").strip()
+    initials_text = (payload.get("initials_text") or "").strip()
+    answer_text = (payload.get("answer_text") or "").strip()
+    if not initials_text or not answer_text:
+        return jsonify({"ok": False, "error": "initials_text and answer_text required"}), 400
+
+    data = load_data()
+    ensure_schema(data)
+    data["cards"].append(create_initials_card(study_date, title, initials_text, answer_text))
+    save_data(data)
+    return jsonify({"ok": True})
 
 
 @app.post("/api/notes/upload")
