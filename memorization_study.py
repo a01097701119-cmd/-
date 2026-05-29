@@ -129,9 +129,9 @@ def make_card(study_date, title, question, answer, quiz_type):
 def parse_outline_line(raw):
     text = raw.strip()
     patterns = [
-        (r"^\d+\.\d+\.\d+\s+", 2),
-        (r"^\d+\.\d+\s+", 1),
-        (r"^\d+\.\s+", 0),
+        (r"^\d+\.\d+\.\d+\s+", 3),
+        (r"^\d+\.\d+\s+", 2),
+        (r"^\d+\.\s+", 1),
         (r"^\d+\)\s+", 1),
         (r"^\(\d+\)\s+", 2),
         (r"^[①②③④⑤⑥⑦⑧⑨⑩]\s*", 3),
